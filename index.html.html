@@ -36,6 +36,10 @@
 
     --bloqueado:#4a5568;
     --bloqueado-bg:#e2e8f0;
+    
+    --sync-ok:#2f9e6e;
+    --sync-warn:#c98a1f;
+    --sync-err:#e53e3e;
   }
 
   *{ box-sizing:border-box; margin:0; padding:0; }
@@ -50,7 +54,7 @@
   header{
     background: linear-gradient(120deg, var(--azul-900), var(--azul-700));
     color:#fff;
-    padding: 22px 36px;
+    padding: 16px 36px;
     display:flex;
     justify-content:space-between;
     align-items:center;
@@ -71,21 +75,43 @@
   .brand span{ font-size:12px; color:#cfdcea; font-weight:400; }
 
   .header-actions{ display:flex; gap:10px; align-items:center; }
-  .btn-export{
+  
+  .sync-status{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    font-size:11px;
+    padding:6px 12px;
+    border-radius:20px;
+    background:rgba(255,255,255,.15);
+    font-weight:600;
+  }
+  .sync-dot{
+    width:8px; height:8px; border-radius:50%;
+    background:var(--sync-ok);
+    animation: pulse 2s infinite;
+  }
+  .sync-dot.saving{ background:var(--sync-warn); animation: blink .5s infinite; }
+  .sync-dot.error{ background:var(--sync-err); animation: none; }
+  
+  @keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:.5;} }
+  @keyframes blink{ 0%,100%{opacity:1;} 50%{opacity:.3;} }
+
+  .btn-export, .btn-config{
     background:#fff;
     color:var(--azul-800);
     border:none;
-    padding:10px 18px;
+    padding:8px 16px;
     border-radius:8px;
-    font-size:13px;
+    font-size:12px;
     font-weight:600;
     cursor:pointer;
-    display:flex; align-items:center; gap:8px;
+    display:flex; align-items:center; gap:6px;
     transition:.2s;
   }
-  .btn-export:hover{ background:#dfe8f1; transform:translateY(-1px); }
-
-  .updated-at{ font-size:11px; color:#aebfd2; }
+  .btn-export:hover, .btn-config:hover{ background:#dfe8f1; transform:translateY(-1px); }
+  .btn-config{ background:rgba(255,255,255,.2); color:#fff; border:1px solid rgba(255,255,255,.3); }
+  .btn-config:hover{ background:rgba(255,255,255,.3); }
 
   /* ===== DASHBOARD ===== */
   .dashboard{
@@ -323,6 +349,33 @@
   .btn-cancel{ background:var(--cinza-100); color:var(--cinza-600); }
   .btn-cancel:hover{ background:var(--cinza-200); }
 
+  /* ===== CONFIG MODAL ===== */
+  .config-modal{
+    background:#fff;
+    width:500px;
+    max-width:95%;
+    border-radius:16px;
+    padding:26px;
+    box-shadow:0 20px 50px rgba(0,0,0,.25);
+  }
+  .config-modal h3{ margin-bottom:16px; color:var(--azul-900); }
+  .config-modal .info-box{
+    background:#e6f7ff;
+    border:1px solid #91caff;
+    border-radius:8px;
+    padding:12px;
+    margin-bottom:16px;
+    font-size:13px;
+    color:#005073;
+  }
+  .config-modal code{
+    background:#f0f0f0;
+    padding:2px 6px;
+    border-radius:4px;
+    font-family:monospace;
+    font-size:12px;
+  }
+
   footer{
     text-align:center; padding:18px; font-size:11.5px; color:var(--cinza-400);
     background:#fff; border-top:1px solid var(--cinza-200);
@@ -347,8 +400,12 @@
     </div>
   </div>
   <div class="header-actions">
-    <div class="updated-at" id="updatedAt"></div>
-    <button class="btn-export" onclick="exportCSV()">⬇ Exportar relatório (CSV)</button>
+    <div class="sync-status" id="syncStatus">
+      <div class="sync-dot" id="syncDot"></div>
+      <span id="syncText">Sincronizado</span>
+    </div>
+    <button class="btn-config" onclick="abrirConfig()">⚙ Configurar Nuvem</button>
+    <button class="btn-export" onclick="exportCSV()">⬇ Exportar CSV</button>
   </div>
 </header>
 
@@ -414,9 +471,9 @@
 
 <div class="container" id="container"></div>
 
-<footer>Gestão Tryp Congonhas — Sistema interno de controle de unidades · dados armazenados localmente neste navegador</footer>
+<footer>Gestão Tryp Congonhas — Dados sincronizados na nuvem em tempo real</footer>
 
-<!-- MODAL -->
+<!-- MODAL UNIDADE -->
 <div class="overlay" id="overlay">
   <div class="modal">
     <div class="modal-head">
@@ -513,7 +570,133 @@
   </div>
 </div>
 
+<!-- MODAL CONFIG -->
+<div class="overlay" id="configOverlay">
+  <div class="config-modal">
+    <div class="modal-head">
+      <h3>⚙ Configurar Sincronização na Nuvem</h3>
+      <span class="close-x" onclick="fecharConfig()">&times;</span>
+    </div>
+    
+    <div class="info-box">
+      <strong>Como ativar a sincronização:</strong><br><br>
+      1. Acesse <a href="https://console.firebase.google.com/" target="_blank">Firebase Console</a><br>
+      2. Crie um novo projeto gratuito<br>
+      3. Em "Configurações do projeto" > "Seus apps" > Web, crie um app<br>
+      4. Copie as configurações abaixo e cole aqui:<br><br>
+      <code>apiKey, authDomain, databaseURL, projectId</code>
+    </div>
+
+    <label>API Key</label>
+    <input type="text" id="cfgApiKey" placeholder="AIzaSy...">
+
+    <label>Auth Domain</label>
+    <input type="text" id="cfgAuthDomain" placeholder="seu-projeto.firebaseapp.com">
+
+    <label>Database URL</label>
+    <input type="text" id="cfgDatabaseUrl" placeholder="https://seu-projeto-default-rtdb.firebaseio.com">
+
+    <label>Project ID</label>
+    <input type="text" id="cfgProjectId" placeholder="seu-projeto">
+
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="fecharConfig()">Cancelar</button>
+      <button class="btn-save" onclick="salvarConfig()">Salvar Configuração</button>
+    </div>
+    
+    <div style="margin-top:16px; font-size:12px; color:var(--cinza-600); text-align:center;">
+      Os dados são salvos localmente se a nuvem não estiver configurada.
+    </div>
+  </div>
+</div>
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+
 <script>
+/* ===================== CONFIGURAÇÃO FIREBASE ===================== */
+let firebaseConfig = null;
+let db = null;
+let usandoNuvem = false;
+let syncTimeout = null;
+
+// Tenta carregar config salva
+try {
+  const savedConfig = localStorage.getItem('tryp_firebase_config');
+  if(savedConfig) {
+    firebaseConfig = JSON.parse(savedConfig);
+    inicializarFirebase();
+  }
+} catch(e) { console.error('Erro ao carregar config:', e); }
+
+function inicializarFirebase(){
+  if(!firebaseConfig) return;
+  try {
+    firebase.initializeApp(firebaseConfig);
+    db = firebase.database();
+    usandoNuvem = true;
+    atualizarStatusSync('connected', 'Conectado à nuvem');
+    carregarDadosNuvem();
+  } catch(e) {
+    console.error('Erro Firebase:', e);
+    usandoNuvem = false;
+    atualizarStatusSync('error', 'Erro de conexão');
+  }
+}
+
+function atualizarStatusSync(status, texto){
+  const dot = document.getElementById('syncDot');
+  const txt = document.getElementById('syncText');
+  dot.className = 'sync-dot';
+  
+  if(status === 'saving') {
+    dot.classList.add('saving');
+    txt.textContent = 'Salvando...';
+  } else if(status === 'error') {
+    dot.classList.add('error');
+    txt.textContent = texto || 'Erro';
+  } else if(status === 'connected') {
+    txt.textContent = texto || 'Sincronizado';
+  } else {
+    txt.textContent = 'Local apenas';
+  }
+}
+
+function salvarConfig(){
+  const config = {
+    apiKey: document.getElementById('cfgApiKey').value.trim(),
+    authDomain: document.getElementById('cfgAuthDomain').value.trim(),
+    databaseURL: document.getElementById('cfgDatabaseUrl').value.trim(),
+    projectId: document.getElementById('cfgProjectId').value.trim()
+  };
+  
+  if(!config.apiKey || !config.databaseURL) {
+    alert('Preencha pelo menos API Key e Database URL');
+    return;
+  }
+  
+  localStorage.setItem('tryp_firebase_config', JSON.stringify(config));
+  firebaseConfig = config;
+  inicializarFirebase();
+  fecharConfig();
+  alert('Configuração salva! Os dados agora serão sincronizados na nuvem.');
+}
+
+function abrirConfig(){
+  if(firebaseConfig) {
+    document.getElementById('cfgApiKey').value = firebaseConfig.apiKey || '';
+    document.getElementById('cfgAuthDomain').value = firebaseConfig.authDomain || '';
+    document.getElementById('cfgDatabaseUrl').value = firebaseConfig.databaseURL || '';
+    document.getElementById('cfgProjectId').value = firebaseConfig.projectId || '';
+  }
+  document.getElementById('configOverlay').classList.add('active');
+}
+
+function fecharConfig(){
+  document.getElementById('configOverlay').classList.remove('active');
+}
+
 /* ===================== DADOS ===================== */
 const STORAGE_KEY = "tryp_congonhas_unidades_v4";
 
@@ -568,6 +751,11 @@ function migrarDados(dados){
   return dados;
 }
 
+let floors = [];
+let unidadeSelecionada = null;
+let andaresColapsados = {};
+
+// Carrega dados (prioriza nuvem se disponível)
 function carregarDados(){
   const saved = localStorage.getItem(STORAGE_KEY);
   if(saved) return migrarDados(JSON.parse(saved));
@@ -575,11 +763,46 @@ function carregarDados(){
   salvarLocal(dados);
   return dados;
 }
-function salvarLocal(dados){ localStorage.setItem(STORAGE_KEY, JSON.stringify(dados)); }
 
-let floors = carregarDados();
-let unidadeSelecionada = null;
-let andaresColapsados = {};
+function salvarLocal(dados){ 
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(dados)); 
+}
+
+// Salva na nuvem com debounce
+function salvarNuvem(dados){
+  if(!usandoNuvem || !db) return;
+  
+  atualizarStatusSync('saving', 'Salvando...');
+  
+  if(syncTimeout) clearTimeout(syncTimeout);
+  syncTimeout = setTimeout(() => {
+    db.ref('unidades').set(dados)
+      .then(() => {
+        atualizarStatusSync('connected', 'Sincronizado');
+      })
+      .catch(err => {
+        console.error('Erro ao salvar:', err);
+        atualizarStatusSync('error', 'Erro ao salvar');
+      });
+  }, 1000); // Aguarda 1s sem alterações para salvar
+}
+
+// Carrega da nuvem e atualiza local
+function carregarDadosNuvem(){
+  if(!usandoNuvem || !db) return;
+  
+  db.ref('unidades').on('value', snapshot => {
+    const dados = snapshot.val();
+    if(dados) {
+      floors = migrarDados(dados);
+      salvarLocal(floors); // Mantém cache local
+      render();
+      atualizarStatusSync('connected', 'Sincronizado');
+    }
+  });
+}
+
+floors = carregarDados();
 
 /* ===================== HELPERS ===================== */
 const todasUnidades = () => floors.flatMap(f => f.units);
@@ -600,8 +823,10 @@ const condicaoLabel = {
 
 function atualizarTimestamp(){
   const now = new Date();
+  // Adiciona indicador de nuvem se disponível
+  const cloudStatus = usandoNuvem ? "☁️ Nuvem" : "💾 Local";
   document.getElementById("updatedAt").textContent =
-    "Atualizado em " + now.toLocaleDateString('pt-BR') + " às " + now.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'});
+    `${cloudStatus} · Atualizado em ${now.toLocaleDateString('pt-BR')} às ${now.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'})}`;
 }
 
 /* ===================== SELECT DE ANDARES ===================== */
@@ -847,7 +1072,10 @@ function salvarUnidade(){
   unidadeSelecionada.data = document.getElementById("mData").value;
   unidadeSelecionada.obs = document.getElementById("mObs").value;
   
+  // Salva local e na nuvem
   salvarLocal(floors);
+  salvarNuvem(floors);
+  
   fecharModal();
   render();
 }
@@ -875,6 +1103,17 @@ function exportCSV(){
 
 /* ===================== INICIALIZAÇÃO ===================== */
 render();
+
+// Detecta quando volta online
+window.addEventListener('online', () => {
+  if(usandoNuvem) {
+    atualizarStatusSync('connected', 'Reconectado');
+    carregarDadosNuvem();
+  }
+});
+window.addEventListener('offline', () => {
+  atualizarStatusSync('error', 'Offline');
+});
 </script>
 </body>
 </html>
